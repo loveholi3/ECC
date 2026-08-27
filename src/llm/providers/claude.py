@@ -127,6 +127,10 @@ class ClaudeProvider(LLMProvider):
                 raise ContextLengthError(msg, provider=ProviderType.CLAUDE) from e
             raise
 
+    async def agenerate(self, input: LLMInput) -> LLMOutput:
+        import asyncio
+        return await asyncio.to_thread(self.generate, input)
+
     def list_models(self) -> list[ModelInfo]:
         return self._models.copy()
 

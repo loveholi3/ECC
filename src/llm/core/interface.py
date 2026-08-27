@@ -15,6 +15,9 @@ class LLMProvider(ABC):
     def generate(self, input: LLMInput) -> LLMOutput: ...
 
     @abstractmethod
+    async def agenerate(self, input: LLMInput) -> LLMOutput: ...
+
+    @abstractmethod
     def list_models(self) -> list[ModelInfo]: ...
 
     @abstractmethod

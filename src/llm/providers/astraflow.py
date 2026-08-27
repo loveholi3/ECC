@@ -120,6 +120,10 @@ class _AstraflowBaseProvider(LLMProvider):
                 raise ContextLengthError(msg, provider=self.provider_type) from e
             raise
 
+    async def agenerate(self, llm_input: LLMInput) -> LLMOutput:
+        import asyncio
+        return await asyncio.to_thread(self.generate, llm_input)
+
     def list_models(self) -> list[ModelInfo]:
         return self._models.copy()
 
