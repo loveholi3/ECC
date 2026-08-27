@@ -292,6 +292,79 @@ function runTests() {
     passed++;
   else failed++;
 
+  console.log('\nError handling:');
+
+  if (
+    test('readWarnState catch block handles invalid json gracefully', () => {
+      const sessionId = `test-read-err-${Date.now()}`;
+      const input = JSON.stringify({ session_id: sessionId, tool_name: 'Bash' });
+      const warnPath = path.join(os.tmpdir(), `ecc-ctx-warn-${sessionId}.json`);
+      try {
+        writeBridgeAtomic(sessionId, {
+          context_remaining_pct: 20,
+          total_cost_usd: 55,
+          last_timestamp: new Date().toISOString()
+        });
+        fs.writeFileSync(warnPath, '{ invalid json }');
+        const result = JSON.parse(run(input));
+        assert.ok(result.hookSpecificOutput, 'Expected output despite invalid json');
+        assert.ok(result.hookSpecificOutput.additionalContext.includes('CONTEXT CRITICAL'));
+      } finally {
+        fs.rmSync(getBridgePath(sessionId), { force: true });
+        fs.rmSync(warnPath, { force: true });
+      }
+    })
+  )
+    passed++;
+  else failed++;
+
+  if (
+    test('writeWarnState catch block cleans up tmp and run returns raw input on filesystem error', () => {
+      const sessionId = `test-write-err-${Date.now()}`;
+      const input = JSON.stringify({ session_id: sessionId, tool_name: 'Bash' });
+      const warnPath = path.join(os.tmpdir(), `ecc-ctx-warn-${sessionId}.json`);
+
+      let unlinkCalledCount = 0;
+      const originalRenameSync = fs.renameSync;
+      const originalUnlinkSync = fs.unlinkSync;
+
+      try {
+        writeBridgeAtomic(sessionId, {
+          context_remaining_pct: 20,
+          total_cost_usd: 55,
+          last_timestamp: new Date().toISOString()
+        });
+
+        fs.renameSync = (tmp, target) => {
+          if (target === warnPath) {
+            throw Object.assign(new Error('Mock ENOENT'), { code: 'ENOENT' });
+          }
+          originalRenameSync(tmp, target);
+        };
+
+        fs.unlinkSync = (p) => {
+          if (typeof p === 'string' && p.includes(`ecc-ctx-warn-${sessionId}.json`) && p.endsWith('.tmp')) {
+            unlinkCalledCount++;
+          } else {
+            originalUnlinkSync(p);
+          }
+        };
+
+        const result = run(input);
+
+        assert.strictEqual(result, input, 'Expected run to return raw input on unhandled throw');
+        assert.strictEqual(unlinkCalledCount, 1, 'Expected tmp file to be unlinked once');
+      } finally {
+        fs.renameSync = originalRenameSync;
+        fs.unlinkSync = originalUnlinkSync;
+        fs.rmSync(getBridgePath(sessionId), { force: true });
+        fs.rmSync(warnPath, { force: true });
+      }
+    })
+  )
+    passed++;
+  else failed++;
+
   // Summary
   console.log(`\nResults: ${passed} passed, ${failed} failed\n`);
   return { passed, failed };
