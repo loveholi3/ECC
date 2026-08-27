@@ -25,17 +25,18 @@ Examples:
   python scripts/ws_listener.py --clear /tmp/mydir                # Custom dir with clear
   kill "$(cat ~/.local/state/videodb/videodb_ws_pid)"             # Stop the listener
 """
-import os
-import sys
-import json
-import signal
 import asyncio
-import logging
 import contextlib
+import json
+import logging
+import os
+import signal
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 import videodb
@@ -119,6 +120,52 @@ def append_event(event: dict):
         f.write(json.dumps(event) + "\n")
 
 
+async def process_event_queue(queue: asyncio.Queue):
+    """Background task to process events asynchronously."""
+    while True:
+        try:
+            # Wait for an event
+            event = await queue.get()
+            if event is None:
+                # Sentinel value to exit
+                queue.task_done()
+                break
+
+            # Batch process up to 1000 events to optimize I/O
+            events = [event]
+            while not queue.empty() and len(events) < 1000:
+                e = queue.get_nowait()
+                if e is None:
+                    # Put it back to exit cleanly on next iteration
+                    queue.put_nowait(e)
+                    break
+                events.append(e)
+
+            # Process synchronously in a thread
+            def _process_batch(batch_events):
+                lines = []
+                for evt in batch_events:
+                    lines.append(json.dumps(evt) + "\n")
+
+                with EVENTS_FILE.open("a", encoding="utf-8") as f:
+                    f.write("".join(lines))
+
+                for evt in batch_events:
+                    channel = evt.get("channel", evt.get("event", "unknown"))
+                    text = evt.get("data", {}).get("text", "")
+                    if text:
+                        print(f"[{channel}] {text[:80]}", flush=True)
+
+            await asyncio.to_thread(_process_batch, events)
+
+            for _ in range(len(events)):
+                queue.task_done()
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            LOGGER.error("Error in event processor: %s", e)
+
+
 def write_pid():
     """Write PID file for easy process management."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -151,56 +198,17 @@ async def listen_with_retry():
     retry_count = 0
     backoff = INITIAL_BACKOFF
     
-    while retry_count < MAX_RETRIES:
-        try:
-            conn = videodb.connect()
-            ws_wrapper = conn.connect_websocket()
-            ws = await ws_wrapper.connect()
-            ws_id = ws.connection_id
-        except asyncio.CancelledError:
-            log("Shutdown requested")
-            raise
-        except Exception as e:
-            if is_fatal_error(e):
-                log(f"Fatal configuration error: {e}")
-                raise
-            if not isinstance(e, RETRYABLE_ERRORS):
-                raise
-            retry_count += 1
-            log(f"Connection error: {e}")
-            
-            if retry_count >= MAX_RETRIES:
-                log(f"Max retries ({MAX_RETRIES}) exceeded, exiting")
-                break
-            
-            log(f"Reconnecting in {backoff}s (attempt {retry_count}/{MAX_RETRIES})...")
-            await asyncio.sleep(backoff)
-            backoff = min(backoff * 2, MAX_BACKOFF)
-            continue
+    # Create an event queue and start the processor task
+    event_queue = asyncio.Queue()
+    processor_task = asyncio.create_task(process_event_queue(event_queue))
 
-        OUTPUT_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
-
-        if _first_connection and CLEAR_EVENTS:
-            EVENTS_FILE.unlink(missing_ok=True)
-            log("Cleared events file")
-        _first_connection = False
-
-        WS_ID_FILE.write_text(ws_id)
-
-        if retry_count == 0:
-            print(f"WS_ID={ws_id}", flush=True)
-        log(f"Connected (ws_id={ws_id})")
-
-        retry_count = 0
-        backoff = INITIAL_BACKOFF
-
-        receiver = ws.receive().__aiter__()
-        while True:
+    try:
+        while retry_count < MAX_RETRIES:
             try:
-                msg = await anext(receiver)
-            except StopAsyncIteration:
-                log("Connection closed by server")
-                break
+                conn = videodb.connect()
+                ws_wrapper = conn.connect_websocket()
+                ws = await ws_wrapper.connect()
+                ws_id = ws.connection_id
             except asyncio.CancelledError:
                 log("Shutdown requested")
                 raise
@@ -215,18 +223,76 @@ async def listen_with_retry():
 
                 if retry_count >= MAX_RETRIES:
                     log(f"Max retries ({MAX_RETRIES}) exceeded, exiting")
-                    return
+                    break
 
                 log(f"Reconnecting in {backoff}s (attempt {retry_count}/{MAX_RETRIES})...")
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, MAX_BACKOFF)
-                break
+                continue
 
-            append_event(msg)
-            channel = msg.get("channel", msg.get("event", "unknown"))
-            text = msg.get("data", {}).get("text", "")
-            if text:
-                print(f"[{channel}] {text[:80]}", flush=True)
+            OUTPUT_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
+
+            if _first_connection and CLEAR_EVENTS:
+                EVENTS_FILE.unlink(missing_ok=True)
+                log("Cleared events file")
+            _first_connection = False
+
+            WS_ID_FILE.write_text(ws_id)
+
+            if retry_count == 0:
+                print(f"WS_ID={ws_id}", flush=True)
+            log(f"Connected (ws_id={ws_id})")
+
+            retry_count = 0
+            backoff = INITIAL_BACKOFF
+
+            receiver = ws.receive().__aiter__()
+            while True:
+                try:
+                    msg = await anext(receiver)
+                    # timestamp the event immediately
+                    if "ts" not in msg:
+                        now = datetime.now(timezone.utc)
+                        msg["ts"] = now.isoformat()
+                        msg["unix_ts"] = now.timestamp()
+                except StopAsyncIteration:
+                    log("Connection closed by server")
+                    break
+                except asyncio.CancelledError:
+                    log("Shutdown requested")
+                    raise
+                except Exception as e:
+                    if is_fatal_error(e):
+                        log(f"Fatal configuration error: {e}")
+                        raise
+                    if not isinstance(e, RETRYABLE_ERRORS):
+                        raise
+                    retry_count += 1
+                    log(f"Connection error: {e}")
+
+                    if retry_count >= MAX_RETRIES:
+                        log(f"Max retries ({MAX_RETRIES}) exceeded, exiting")
+                        return
+
+                    log(f"Reconnecting in {backoff}s (attempt {retry_count}/{MAX_RETRIES})...")
+                    await asyncio.sleep(backoff)
+                    backoff = min(backoff * 2, MAX_BACKOFF)
+                    break
+
+                await event_queue.put(msg)
+    finally:
+        # Signal the processor to shut down and wait for it
+        await event_queue.put(None)
+
+        # Guard against CancelledError when shutting down
+        try:
+            # wait with timeout to ensure we don't hang if the task gets stuck
+            await asyncio.wait_for(asyncio.shield(processor_task), timeout=5.0)
+        except asyncio.TimeoutError:
+            log("Processor task timed out during shutdown")
+        except asyncio.CancelledError:
+            # We are already being cancelled, so we can ignore this
+            pass
 
 
 async def main_async():
