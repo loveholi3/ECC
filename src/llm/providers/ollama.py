@@ -102,6 +102,61 @@ class OllamaProvider(LLMProvider):
                 raise ContextLengthError(msg, provider=ProviderType.OLLAMA) from e
             raise
 
+    async def agenerate(self, input: LLMInput) -> LLMOutput:
+        import aiohttp
+        import json
+
+        try:
+            url = f"{self.base_url}/api/chat"
+            model = input.model or self.default_model
+
+            payload: dict[str, Any] = {
+                "model": model,
+                "messages": [msg.to_dict() for msg in input.messages],
+                "stream": False,
+            }
+            if input.temperature != 1.0:
+                payload["options"] = {"temperature": input.temperature}
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    url,
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                    timeout=aiohttp.ClientTimeout(total=60)
+                ) as response:
+                    response.raise_for_status()
+                    result = await response.json()
+
+            content = result.get("message", {}).get("content", "")
+
+            tool_calls = None
+            if result.get("message", {}).get("tool_calls"):
+                tool_calls = [
+                    ToolCall(
+                        id=tc.get("id", ""),
+                        name=tc.get("function", {}).get("name", ""),
+                        arguments=tc.get("function", {}).get("arguments", {}),
+                    )
+                    for tc in result["message"]["tool_calls"]
+                ]
+
+            return LLMOutput(
+                content=content,
+                tool_calls=tool_calls,
+                model=model,
+                stop_reason=result.get("done_reason"),
+            )
+        except Exception as e:
+            msg = str(e)
+            if "401" in msg or "connection" in msg.lower():
+                raise AuthenticationError(f"Ollama connection failed: {msg}", provider=ProviderType.OLLAMA) from e
+            if "429" in msg or "rate_limit" in msg.lower():
+                raise RateLimitError(msg, provider=ProviderType.OLLAMA) from e
+            if "context" in msg.lower() and "length" in msg.lower():
+                raise ContextLengthError(msg, provider=ProviderType.OLLAMA) from e
+            raise
+
     def list_models(self) -> list[ModelInfo]:
         return self._models.copy()
 
