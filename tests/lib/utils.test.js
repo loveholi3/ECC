@@ -1294,6 +1294,24 @@ function runTests() {
     assert.ok(result.output.includes('metacharacters not allowed'), 'Should block newline injection');
   })) passed++; else failed++;
 
+  if (test('runCommand blocks file redirection output', () => {
+    const result = utils.runCommand('git status > pwned.txt');
+    assert.strictEqual(result.success, false);
+    assert.ok(result.output.includes('metacharacters not allowed'), 'Should block output redirection');
+  })) passed++; else failed++;
+
+  if (test('runCommand blocks file redirection input', () => {
+    const result = utils.runCommand('git status < input.txt');
+    assert.strictEqual(result.success, false);
+    assert.ok(result.output.includes('metacharacters not allowed'), 'Should block input redirection');
+  })) passed++; else failed++;
+
+  if (test('runCommand blocks parenthesis', () => {
+    const result = utils.runCommand('git status (echo pwned)');
+    assert.strictEqual(result.success, false);
+    assert.ok(result.output.includes('metacharacters not allowed'), 'Should block parenthesis');
+  })) passed++; else failed++;
+
   if (test('runCommand blocks $() inside double quotes (shell still evaluates)', () => {
     // $() inside double quotes is still evaluated by the shell, so block $ everywhere
     const result = utils.runCommand('node -e "$(whoami)"');
