@@ -95,13 +95,6 @@ function askClaude(systemPrompt, history, userMessage, model) {
   }
   args.push('-p');
 
-  // On Windows the `claude` binary installed via npm is `claude.cmd`/`claude.ps1`,
-  // and Node's spawn() cannot resolve those wrappers via PATH without shell: true.
-  // But shell mode concatenates args *unescaped*, so a multi-line prompt passed as
-  // an arg gets mangled (newlines and the `===` section markers truncate it, and
-  // claude receives an empty prompt). Fix: send the prompt over stdin via `input`
-  // and keep only the short, safe flags (`--model`, `-p`) as args.
-  // 'claude' is a hardcoded literal here (not user input), so shell mode is safe.
   const result = spawnSync('claude', args, {
     input: fullPrompt,
     encoding: 'utf8',
