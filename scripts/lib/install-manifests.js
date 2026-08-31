@@ -280,8 +280,17 @@ function getManifestPaths(repoRoot = DEFAULT_REPO_ROOT) {
   };
 }
 
+let cachedManifests = null;
+let cachedManifestsRepoRoot = null;
+
 function loadInstallManifests(options = {}) {
   const repoRoot = options.repoRoot || DEFAULT_REPO_ROOT;
+
+  // Performance optimization: Cache manifest payload to prevent repeated disk I/O in the same CLI process.
+  if (cachedManifests && cachedManifestsRepoRoot === repoRoot) {
+    return cachedManifests;
+  }
+
   const { modulesPath, profilesPath, componentsPath } = getManifestPaths(repoRoot);
 
   if (!fs.existsSync(modulesPath) || !fs.existsSync(profilesPath)) {
@@ -308,7 +317,8 @@ function loadInstallManifests(options = {}) {
   const modulesById = new Map(modules.map(module => [module.id, module]));
   const componentsById = new Map(components.map(component => [component.id, component]));
 
-  return {
+  cachedManifestsRepoRoot = repoRoot;
+  cachedManifests = {
     repoRoot,
     modulesPath,
     profilesPath,
@@ -322,6 +332,8 @@ function loadInstallManifests(options = {}) {
     profilesVersion: profilesData.version,
     componentsVersion: componentsData.version,
   };
+
+  return cachedManifests;
 }
 
 function listInstallProfiles(options = {}) {
