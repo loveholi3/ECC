@@ -1,5 +1,7 @@
 from types import SimpleNamespace
+import pytest
 
+from llm.core.interface import AuthenticationError, ContextLengthError, RateLimitError
 from llm.core.types import LLMInput, Message, ProviderType, Role, ToolDefinition, ToolCall
 from llm.providers.astraflow import ASTRAFLOW_BASE_URL, ASTRAFLOW_CN_BASE_URL, AstraflowCNProvider, AstraflowProvider
 
@@ -139,3 +141,38 @@ def test_astraflow_provider_preserves_malformed_tool_arguments():
     output = provider.generate(LLMInput(messages=[Message(role=Role.USER, content="hi")]))
 
     assert output.tool_calls == [ToolCall(id="call_1", name="search", arguments={"raw": "{not-json"})]
+
+
+@pytest.mark.parametrize(
+    "error_message, expected_exception",
+    [
+        ("401 Unauthorized", AuthenticationError),
+        ("Authentication failed", AuthenticationError),
+        ("429 Too Many Requests", RateLimitError),
+        ("Rate_Limit exceeded", RateLimitError),
+        ("Context length exceeded", ContextLengthError),
+        ("Something went wrong", Exception),
+    ],
+)
+def test_astraflow_provider_error_handling(error_message, expected_exception):
+    provider = AstraflowProvider(api_key="test")
+
+    class _MockCompletions:
+        def create(self, **params):
+            raise Exception(error_message)
+
+    class _MockChat:
+        def __init__(self):
+            self.completions = _MockCompletions()
+
+    class _MockClient:
+        def __init__(self):
+            self.chat = _MockChat()
+
+    provider.client = _MockClient()
+
+    with pytest.raises(expected_exception) as exc_info:
+        provider.generate(LLMInput(messages=[Message(role=Role.USER, content="hi")]))
+
+    if expected_exception is not Exception:
+        assert getattr(exc_info.value, "provider", None) == provider.provider_type
