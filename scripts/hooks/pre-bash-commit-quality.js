@@ -95,7 +95,7 @@ function findFileIssues(filePath) {
         });
       }
       
-      // Check for TODO/FIXME without issue reference
+      // Ensure task comments have an issue reference
       const todoMatch = line.match(/\/\/\s*(TODO|FIXME):?\s*(.+)/);
       if (todoMatch && !todoMatch[2].match(/#\d+|issue/i)) {
         issues.push({
