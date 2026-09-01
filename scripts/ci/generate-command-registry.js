@@ -78,12 +78,18 @@ function extractDescription(content) {
 function collectKnownReferences(content, patterns, knownNames) {
   const refs = new Set();
 
-  for (const pattern of patterns) {
-    for (const match of content.matchAll(pattern)) {
-      const ref = match[1];
-      if (knownNames.has(ref)) {
-        refs.add(ref);
-      }
+  if (!patterns || patterns.length === 0) {
+    return refs;
+  }
+
+  const combinedSource = patterns.map(p => p.source).join('|');
+  const flags = patterns[0].flags;
+  const combinedPattern = new RegExp(combinedSource, flags);
+
+  for (const match of content.matchAll(combinedPattern)) {
+    const ref = match.slice(1).find(g => g !== undefined);
+    if (ref && knownNames.has(ref)) {
+      refs.add(ref);
     }
   }
 
