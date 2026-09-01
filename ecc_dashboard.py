@@ -7,9 +7,8 @@ Cross-platform TkInter application for managing ECC components
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox
 import os
-import json
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 import logging
 import webbrowser
 
@@ -45,18 +44,18 @@ def load_agents(project_path: str) -> List[Dict]:
             description = ''
             try:
                 with open(agent_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
+                    # Optimize memory and CPU by reading line by line for frontmatter
+                    if f.readline().startswith('---'):
+                        for line in f:
+                            if line.startswith('---'):
+                                break
+                            stripped = line.strip()
+                            if stripped.startswith('name:'):
+                                name = stripped[5:].strip().strip('"\'')
+                            elif stripped.startswith('description:'):
+                                description = stripped[12:].strip().strip('"\'')
             except OSError:
-                content = ''
-            if content.startswith('---'):
-                end = content.find('\n---', 3)
-                if end != -1:
-                    for fm_line in content[3:end].splitlines():
-                        stripped = fm_line.strip()
-                        if stripped.startswith('name:'):
-                            name = stripped.split(':', 1)[1].strip().strip('"\'')
-                        elif stripped.startswith('description:'):
-                            description = stripped.split(':', 1)[1].strip().strip('"\'')
+                pass
             agents.append({
                 'name': name,
                 'purpose': description,
