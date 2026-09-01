@@ -500,7 +500,11 @@ function replaceInFile(filePath, search, replace, options = {}) {
     } else {
       newContent = content.replace(search, replace);
     }
-    writeFile(filePath, newContent);
+
+    // 최적화: 내용이 변경되지 않았을 경우 불필요한 디스크 쓰기(I/O)를 방지하여 성능을 향상시킴 (Bolt ⚡)
+    if (newContent !== content) {
+      writeFile(filePath, newContent);
+    }
     return true;
   } catch (err) {
     log(`[Utils] replaceInFile failed for ${filePath}: ${err.message}`);
