@@ -352,18 +352,27 @@ export const ECCHooksPlugin: ECCHooksPluginFn = async ({
       let totalConsoleLogCount = 0
       const filesWithConsoleLogs: string[] = []
 
-      for (const file of editedFiles) {
-        if (!file.match(/\.(ts|tsx|js|jsx)$/)) continue
-
-        try {
-          const result = await $`grep -c "console\\.log" ${file} 2>/dev/null`.text()
-          const count = parseInt(result.trim(), 10)
-          if (count > 0) {
-            totalConsoleLogCount += count
-            filesWithConsoleLogs.push(file)
+      // Optimization: run file analysis concurrently rather than sequentially
+      const analysisPromises = Array.from(editedFiles)
+        .filter((file) => file.match(/\.(ts|tsx|js|jsx)$/))
+        .map(async (file) => {
+          try {
+            const result = await $`grep -c "console\\.log" ${file} 2>/dev/null`.text()
+            const count = parseInt(result.trim(), 10)
+            if (count > 0) {
+              return { file, count }
+            }
+          } catch {
+            // No console.log found
           }
-        } catch {
-          // No console.log found
+          return null
+        })
+
+      const results = await Promise.all(analysisPromises)
+      for (const res of results) {
+        if (res) {
+          totalConsoleLogCount += res.count
+          filesWithConsoleLogs.push(res.file)
         }
       }
 
