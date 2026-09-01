@@ -2082,7 +2082,7 @@ function runTests() {
     passed++;
   else failed++;
 
-  // --- Issue #2078 review fix: warning emitted once per *distinct*
+  // --- Issue #2078 review resolution: warning emitted once per *distinct*
   // invalid regex, not once per process. Verifies the same-process
   // path that the reviewers (CodeRabbit + cubic) flagged.
   clearState();
