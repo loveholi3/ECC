@@ -176,7 +176,7 @@ src/main.ts
   })) passed++; else failed++;
 
   if (test('does not treat non-absolute path as file path', () => {
-    // This tests the bug fix: content that ends with .tmp but is not a path
+    // Verify that content ending with .tmp but not being a valid path is treated correctly
     const stats = sessionManager.getSessionStats('Some content ending with test.tmp');
     assert.strictEqual(stats.totalItems, 0);
     assert.strictEqual(stats.lineCount, 1);
