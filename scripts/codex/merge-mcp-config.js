@@ -204,7 +204,7 @@ function removeServerFromText(raw, serverName, existing) {
 // Main
 // ---------------------------------------------------------------------------
 
-function main() {
+async function main() {
   const args = process.argv.slice(2);
   const configPath = args.find(a => !a.startsWith('-'));
   const dryRun = args.includes('--dry-run');
@@ -226,7 +226,7 @@ function main() {
     log(`Disabled via ECC_DISABLED_MCPS: ${[...disabledServers].join(', ')}`);
   }
 
-  let raw = fs.readFileSync(configPath, 'utf8');
+  let raw = await fs.promises.readFile(configPath, 'utf8');
   let parsed;
   try {
     parsed = TOML.parse(raw);
@@ -336,9 +336,9 @@ function main() {
   if (updateMcp || hasRemovals) {
     for (const label of toRemoveLog) log(`  [update] ${label}`);
     const cleaned = raw.replace(/\n+$/, '\n');
-    fs.writeFileSync(configPath, cleaned + (toAppend.length > 0 ? appendText : ''), 'utf8');
+    await fs.promises.writeFile(configPath, cleaned + (toAppend.length > 0 ? appendText : ''), 'utf8');
   } else {
-    fs.appendFileSync(configPath, appendText, 'utf8');
+    await fs.promises.appendFile(configPath, appendText, 'utf8');
   }
 
   if (hasRemovals && toAppend.length === 0) {
@@ -349,4 +349,7 @@ function main() {
   log(`Done. ${toAppend.length} server(s) ${updateMcp ? 'updated' : 'added'}.`);
 }
 
-main();
+main().catch(err => {
+  console.error(err);
+  process.exit(1);
+});
