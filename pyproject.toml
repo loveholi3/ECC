@@ -65,7 +65,6 @@ exclude_lines = [
 ]
 
 [tool.ruff]
-src-path = ["src"]
 target-version = "py311"
 
 [tool.ruff.lint]
@@ -74,6 +73,5 @@ ignore = ["E501"]
 
 [tool.mypy]
 python_version = "3.11"
-src_paths = ["src"]
 warn_return_any = true
 warn_unused_ignores = true
