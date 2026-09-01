@@ -27,7 +27,9 @@ class ClaudeProvider(LLMProvider):
     provider_type = ProviderType.CLAUDE
 
     def __init__(self, api_key: str | None = None, base_url: str | None = None) -> None:
-        self.client = Anthropic(api_key=api_key or os.environ.get("ANTHROPIC_API_KEY"), base_url=base_url)
+        self.client = Anthropic(
+            api_key=api_key or os.environ.get("ANTHROPIC_API_KEY"), base_url=base_url
+        )
         self._models = [
             ModelInfo(
                 name="claude-opus-4-8",
@@ -55,68 +57,78 @@ class ClaudeProvider(LLMProvider):
             ),
         ]
 
+    def _build_request_params(self, input: LLMInput) -> dict[str, Any]:
+        model = input.model or _DEFAULT_MODEL
+        system_parts = [
+            msg.content for msg in input.messages if msg.role == Role.SYSTEM
+        ]
+        api_messages = [
+            msg.to_dict() for msg in input.messages if msg.role not in (Role.SYSTEM,)
+        ]
+
+        params: dict[str, Any] = {
+            "model": model,
+            "messages": api_messages,
+            "max_tokens": input.max_tokens if input.max_tokens else 16000,
+            "cache_control": {"type": "ephemeral"},
+        }
+        if system_parts:
+            params["system"] = "\n\n".join(system_parts)
+        if input.tools:
+            params["tools"] = [tool.to_anthropic_tool() for tool in input.tools]
+        if not _uses_adaptive_thinking_only(model):
+            params["temperature"] = input.temperature
+        if _uses_adaptive_thinking_only(model):
+            params["thinking"] = {"type": "adaptive"}
+
+        return params
+
+    def _parse_response(self, response: Any) -> LLMOutput:
+        text_parts: list[str] = []
+        tool_calls: list[ToolCall] = []
+        for block in response.content or []:
+            block_type = getattr(block, "type", None)
+            if block_type == "text":
+                text = getattr(block, "text", "")
+                if text:
+                    text_parts.append(text)
+            elif block_type == "tool_use":
+                raw_arguments = getattr(block, "input", {})
+                arguments = (
+                    raw_arguments.copy()
+                    if isinstance(raw_arguments, dict)
+                    else getattr(raw_arguments, "__dict__", {}).copy()
+                )
+                tool_calls.append(
+                    ToolCall(
+                        id=getattr(block, "id", ""),
+                        name=getattr(block, "name", ""),
+                        arguments=arguments,
+                    )
+                )
+
+        return LLMOutput(
+            content="".join(text_parts),
+            tool_calls=tool_calls or None,
+            model=response.model,
+            usage={
+                "input_tokens": response.usage.input_tokens,
+                "output_tokens": response.usage.output_tokens,
+                "cache_creation_input_tokens": getattr(
+                    response.usage, "cache_creation_input_tokens", 0
+                ),
+                "cache_read_input_tokens": getattr(
+                    response.usage, "cache_read_input_tokens", 0
+                ),
+            },
+            stop_reason=response.stop_reason,
+        )
+
     def generate(self, input: LLMInput) -> LLMOutput:
         try:
-            model = input.model or _DEFAULT_MODEL
-            system_parts = [msg.content for msg in input.messages if msg.role == Role.SYSTEM]
-            api_messages = [
-                msg.to_dict() for msg in input.messages if msg.role not in (Role.SYSTEM,)
-            ]
-
-            params: dict[str, Any] = {
-                "model": model,
-                "messages": api_messages,
-                "max_tokens": input.max_tokens if input.max_tokens else 16000,
-                "cache_control": {"type": "ephemeral"},
-            }
-            if system_parts:
-                params["system"] = "\n\n".join(system_parts)
-            if input.tools:
-                params["tools"] = [tool.to_anthropic_tool() for tool in input.tools]
-            if not _uses_adaptive_thinking_only(model):
-                params["temperature"] = input.temperature
-            if _uses_adaptive_thinking_only(model):
-                params["thinking"] = {"type": "adaptive"}
-
+            params = self._build_request_params(input)
             response = self.client.messages.create(**params)
-
-            text_parts: list[str] = []
-            tool_calls: list[ToolCall] = []
-            for block in response.content or []:
-                block_type = getattr(block, "type", None)
-                if block_type == "text":
-                    text = getattr(block, "text", "")
-                    if text:
-                        text_parts.append(text)
-                elif block_type == "tool_use":
-                    raw_arguments = getattr(block, "input", {})
-                    arguments = (
-                        raw_arguments.copy()
-                        if isinstance(raw_arguments, dict)
-                        else getattr(raw_arguments, "__dict__", {}).copy()
-                    )
-                    tool_calls.append(
-                        ToolCall(
-                            id=getattr(block, "id", ""),
-                            name=getattr(block, "name", ""),
-                            arguments=arguments,
-                        )
-                    )
-
-            return LLMOutput(
-                content="".join(text_parts),
-                tool_calls=tool_calls or None,
-                model=response.model,
-                usage={
-                    "input_tokens": response.usage.input_tokens,
-                    "output_tokens": response.usage.output_tokens,
-                    "cache_creation_input_tokens": getattr(
-                        response.usage, "cache_creation_input_tokens", 0
-                    ),
-                    "cache_read_input_tokens": getattr(response.usage, "cache_read_input_tokens", 0),
-                },
-                stop_reason=response.stop_reason,
-            )
+            return self._parse_response(response)
         except Exception as e:
             msg = str(e)
             if "401" in msg or "authentication" in msg.lower():
