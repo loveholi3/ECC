@@ -142,14 +142,11 @@ function isDangerousInvisibleCodePoint(codePoint) {
   );
 }
 
+const dangerousInvisibleRe = /[\u{200B}-\u{200D}\u{2060}\u{FEFF}\u{202A}-\u{202E}\u{2066}-\u{2069}\u{FE00}-\u{FE0F}\u{E0100}-\u{E01EF}\u{E0000}-\u{E007F}\u{180E}\u{115F}\u{1160}\u{2061}-\u{2064}\u{3164}]/gu;
+
 function stripDangerousInvisibleChars(text) {
-  let next = '';
-  for (const char of text) {
-    if (!isDangerousInvisibleCodePoint(char.codePointAt(0))) {
-      next += char;
-    }
-  }
-  return next;
+  // Optimization: using RegExp instead of per-character iteration
+  return text.replace(dangerousInvisibleRe, '');
 }
 
 function sanitizeText(text) {
@@ -194,21 +191,21 @@ function collectMatches(text, regex, kind) {
 
 function collectDangerousInvisibleMatches(text) {
   const matches = [];
-  let index = 0;
 
-  for (const char of text) {
+  // Optimization: use matchAll instead of per-character iteration
+  for (const match of text.matchAll(dangerousInvisibleRe)) {
+    const char = match[0];
     const codePoint = char.codePointAt(0);
-    if (isDangerousInvisibleCodePoint(codePoint)) {
-      const { line, column } = lineAndColumn(text, index);
-      matches.push({
-        kind: 'dangerous-invisible',
-        char,
-        codePoint: `U+${codePoint.toString(16).toUpperCase()}`,
-        line,
-        column,
-      });
-    }
-    index += char.length;
+    const index = match.index ?? 0;
+    const { line, column } = lineAndColumn(text, index);
+
+    matches.push({
+      kind: 'dangerous-invisible',
+      char,
+      codePoint: `U+${codePoint.toString(16).toUpperCase()}`,
+      line,
+      column,
+    });
   }
 
   return matches;
