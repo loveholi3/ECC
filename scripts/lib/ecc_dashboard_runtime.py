@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 import platform
 import subprocess
-from typing import Optional, Tuple, Dict, List
+from typing import Any
 
 
 def maximize_window(window) -> None:
@@ -35,9 +35,9 @@ def maximize_window(window) -> None:
 def build_terminal_launch(
     path: str,
     *,
-    os_name: Optional[str] = None,
-    system_name: Optional[str] = None,
-) -> Tuple[List[str], Dict[str, object]]:
+    os_name: str | None = None,
+    system_name: str | None = None,
+) -> tuple[list[str], dict[str, Any]]:
     """Return safe argv/kwargs for opening a terminal rooted at the requested path."""
     resolved_os_name = os_name or os.name
     resolved_system_name = system_name or platform.system()
