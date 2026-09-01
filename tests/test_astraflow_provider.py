@@ -1,5 +1,8 @@
 from types import SimpleNamespace
 
+import pytest
+
+from llm.core.interface import AuthenticationError, ContextLengthError, RateLimitError
 from llm.core.types import LLMInput, Message, ProviderType, Role, ToolDefinition, ToolCall
 from llm.providers.astraflow import ASTRAFLOW_BASE_URL, ASTRAFLOW_CN_BASE_URL, AstraflowCNProvider, AstraflowProvider
 
@@ -139,3 +142,55 @@ def test_astraflow_provider_preserves_malformed_tool_arguments():
     output = provider.generate(LLMInput(messages=[Message(role=Role.USER, content="hi")]))
 
     assert output.tool_calls == [ToolCall(id="call_1", name="search", arguments={"raw": "{not-json"})]
+
+
+def test_astraflow_provider_authentication_error():
+    provider = AstraflowProvider(api_key="test")
+    client = _Client(_response())
+
+    def mock_create(**kwargs):
+        raise Exception("API returned 401 Unauthorized")
+
+    client.completions.create = mock_create
+    provider.client = client
+
+    with pytest.raises(AuthenticationError) as exc_info:
+        provider.generate(LLMInput(messages=[Message(role=Role.USER, content="hi")]))
+
+    assert exc_info.value.provider == ProviderType.ASTRAFLOW
+    assert "401" in str(exc_info.value)
+
+
+def test_astraflow_provider_rate_limit_error():
+    provider = AstraflowProvider(api_key="test")
+    client = _Client(_response())
+
+    def mock_create(**kwargs):
+        raise Exception("429 Too Many Requests")
+
+    client.completions.create = mock_create
+    provider.client = client
+
+    with pytest.raises(RateLimitError) as exc_info:
+        provider.generate(LLMInput(messages=[Message(role=Role.USER, content="hi")]))
+
+    assert exc_info.value.provider == ProviderType.ASTRAFLOW
+    assert "429" in str(exc_info.value)
+
+
+def test_astraflow_provider_context_length_error():
+    provider = AstraflowProvider(api_key="test")
+    client = _Client(_response())
+
+    def mock_create(**kwargs):
+        raise Exception("Maximum context length exceeded")
+
+    client.completions.create = mock_create
+    provider.client = client
+
+    with pytest.raises(ContextLengthError) as exc_info:
+        provider.generate(LLMInput(messages=[Message(role=Role.USER, content="hi")]))
+
+    assert exc_info.value.provider == ProviderType.ASTRAFLOW
+    assert "context" in str(exc_info.value).lower()
+    assert "length" in str(exc_info.value).lower()
