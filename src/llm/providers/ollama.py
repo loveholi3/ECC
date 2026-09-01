@@ -11,7 +11,13 @@ from llm.core.interface import (
     LLMProvider,
     RateLimitError,
 )
-from llm.core.types import LLMInput, LLMOutput, Message, ModelInfo, ProviderType, ToolCall
+from llm.core.types import (
+    LLMInput,
+    LLMOutput,
+    ModelInfo,
+    ProviderType,
+    ToolCall,
+)
 
 
 class OllamaProvider(LLMProvider):
@@ -22,7 +28,9 @@ class OllamaProvider(LLMProvider):
         base_url: str | None = None,
         default_model: str | None = None,
     ) -> None:
-        self.base_url = base_url or os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+        self.base_url = base_url or os.environ.get(
+            "OLLAMA_BASE_URL", "http://localhost:11434"
+        )
         self.default_model = default_model or os.environ.get("OLLAMA_MODEL", "llama3.2")
         self._models = [
             ModelInfo(
@@ -52,8 +60,8 @@ class OllamaProvider(LLMProvider):
         ]
 
     def generate(self, input: LLMInput) -> LLMOutput:
-        import urllib.request
         import json
+        import urllib.request
 
         try:
             url = f"{self.base_url}/api/chat"
@@ -68,7 +76,9 @@ class OllamaProvider(LLMProvider):
                 payload["options"] = {"temperature": input.temperature}
 
             data = json.dumps(payload).encode("utf-8")
-            req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+            req = urllib.request.Request(
+                url, data=data, headers={"Content-Type": "application/json"}
+            )
 
             with urllib.request.urlopen(req, timeout=60) as response:
                 result = json.loads(response.read().decode("utf-8"))
@@ -95,7 +105,9 @@ class OllamaProvider(LLMProvider):
         except Exception as e:
             msg = str(e)
             if "401" in msg or "connection" in msg.lower():
-                raise AuthenticationError(f"Ollama connection failed: {msg}", provider=ProviderType.OLLAMA) from e
+                raise AuthenticationError(
+                    f"Ollama connection failed: {msg}", provider=ProviderType.OLLAMA
+                ) from e
             if "429" in msg or "rate_limit" in msg.lower():
                 raise RateLimitError(msg, provider=ProviderType.OLLAMA) from e
             if "context" in msg.lower() and "length" in msg.lower():

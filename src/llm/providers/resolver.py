@@ -10,9 +10,8 @@ from llm.core.types import ProviderType
 from llm.providers.astraflow import AstraflowCNProvider, AstraflowProvider
 from llm.providers.atlas import AtlasProvider
 from llm.providers.claude import ClaudeProvider
-from llm.providers.openai import OpenAIProvider
 from llm.providers.ollama import OllamaProvider
-
+from llm.providers.openai import OpenAIProvider
 
 _PROVIDER_MAP: dict[ProviderType, type[LLMProvider]] = {
     ProviderType.ASTRAFLOW: AstraflowProvider,
@@ -48,7 +47,9 @@ def _read_saved_llm_config(env_path: str | Path = LLM_ENV_FILE) -> dict[str, str
     return config
 
 
-def _resolve_provider_type(provider_type: ProviderType | str | None) -> ProviderType | str:
+def _resolve_provider_type(
+    provider_type: ProviderType | str | None,
+) -> ProviderType | str:
     if provider_type is not None:
         return provider_type
 
@@ -60,14 +61,18 @@ def _resolve_provider_type(provider_type: ProviderType | str | None) -> Provider
     return saved_config.get("LLM_PROVIDER", "claude").lower()
 
 
-def get_provider(provider_type: ProviderType | str | None = None, **kwargs: str) -> LLMProvider:
+def get_provider(
+    provider_type: ProviderType | str | None = None, **kwargs: str
+) -> LLMProvider:
     provider_type = _resolve_provider_type(provider_type)
 
     if isinstance(provider_type, str):
         try:
             provider_type = ProviderType(provider_type)
         except ValueError:
-            raise ValueError(f"Unknown provider type: {provider_type}. Valid types: {[p.value for p in ProviderType]}")
+            raise ValueError(
+                f"Unknown provider type: {provider_type}. Valid types: {[p.value for p in ProviderType]}"
+            )
 
     provider_cls = _PROVIDER_MAP.get(provider_type)
     if not provider_cls:
@@ -76,5 +81,7 @@ def get_provider(provider_type: ProviderType | str | None = None, **kwargs: str)
     return provider_cls(**kwargs)
 
 
-def register_provider(provider_type: ProviderType, provider_cls: type[LLMProvider]) -> None:
+def register_provider(
+    provider_type: ProviderType, provider_cls: type[LLMProvider]
+) -> None:
     _PROVIDER_MAP[provider_type] = provider_cls
