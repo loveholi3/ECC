@@ -3438,7 +3438,7 @@ async function runTests() {
 
   if (
     await asyncTest('respects min_session_length=0 from config (nullish coalescing)', async () => {
-      // This tests the ?? fix: min_session_length=0 should mean "evaluate ALL sessions"
+      // This tests the ?? operator: min_session_length=0 should mean "evaluate ALL sessions"
       const testDir = createTestDir();
       const transcriptPath = path.join(testDir, 'short.jsonl');
       // Only 2 user messages — normally below the default threshold of 10
