@@ -714,8 +714,23 @@ function onSearchInput(q) {
   const fs=q?SKILLS.filter(s=>s.n.toLowerCase().includes(q)||s.d.toLowerCase().includes(q)):SKILLS;
   const fc=q?COMMANDS.filter(c=>c.n.toLowerCase().includes(q)||c.d.toLowerCase().includes(q)||c.c.toLowerCase().includes(q)):COMMANDS;
   renderAgents(fa); renderSkills(fs); renderCommands(fc);
-  document.querySelectorAll('#af .active, #sf .active, #cf .active').forEach(b=>b.classList.remove('active'));
-  ['#af button','#sf button','#cf button'].forEach(s=>{const b=document.querySelector(s);if(b)b.classList.add('active')});
+
+  // Optimization ⚡: Avoided full-document queries in tight loop
+  // Instead, caching the parent containers and using optimized queries
+  ['af', 'sf', 'cf'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const actives = el.getElementsByClassName('active');
+    while(actives.length) actives[0].classList.remove('active');
+    const first = el.firstElementChild;
+    if (first && first.tagName === 'BUTTON') {
+      first.classList.add('active');
+    } else {
+      const btn = el.querySelector('button');
+      if (btn) btn.classList.add('active');
+    }
+  });
+
   showSuggestions();
 }
 function showSuggestions() {
