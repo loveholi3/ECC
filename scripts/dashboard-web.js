@@ -714,8 +714,15 @@ function onSearchInput(q) {
   const fs=q?SKILLS.filter(s=>s.n.toLowerCase().includes(q)||s.d.toLowerCase().includes(q)):SKILLS;
   const fc=q?COMMANDS.filter(c=>c.n.toLowerCase().includes(q)||c.d.toLowerCase().includes(q)||c.c.toLowerCase().includes(q)):COMMANDS;
   renderAgents(fa); renderSkills(fs); renderCommands(fc);
-  document.querySelectorAll('#af .active, #sf .active, #cf .active').forEach(b=>b.classList.remove('active'));
-  ['#af button','#sf button','#cf button'].forEach(s=>{const b=document.querySelector(s);if(b)b.classList.add('active')});
+  ['af', 'sf', 'cf'].forEach(id => {
+    const container = document.getElementById(id);
+    if (container) {
+      const actives = container.getElementsByClassName('active');
+      while (actives.length > 0) actives[0].classList.remove('active');
+      const firstBtn = container.getElementsByTagName('button')[0];
+      if (firstBtn) firstBtn.classList.add('active');
+    }
+  });
   showSuggestions();
 }
 function showSuggestions() {
