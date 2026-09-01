@@ -916,7 +916,7 @@ function runTests() {
     try {
       // 4 consecutive lines matching the same pattern
       utils.writeFile(testFile, 'match-line\nmatch-line\nmatch-line\nmatch-line');
-      // Bug: without fix, /match/g would only find lines 1 and 3 (alternating)
+      // Note: without fix, /match/g would only find lines 1 and 3 (alternating)
       const matches = utils.grepFile(testFile, /match/g);
       assert.strictEqual(matches.length, 4, `Should find all 4 lines, found ${matches.length}`);
       assert.strictEqual(matches[0].lineNumber, 1);
