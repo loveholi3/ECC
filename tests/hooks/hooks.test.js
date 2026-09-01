@@ -3000,7 +3000,7 @@ async function runTests() {
       const codeOnly = formatSource.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
       assert.ok(!/execFileSync\([^)]*shell\s*:/.test(codeOnly), 'post-edit-format.js should not pass shell option to execFileSync');
       assert.ok(codeOnly.includes("process.platform === 'win32' && resolved.bin.endsWith('.cmd')"), 'Windows shell execution must stay gated to .cmd shims');
-      assert.ok(codeOnly.includes('UNSAFE_PATH_CHARS'), 'Must guard against shell metacharacters before using shell: true');
+      assert.ok(codeOnly.includes('UNSAFE_PATH_CHARS'), 'Must guard against shell metacharacters');
       // npx.cmd handling in shared resolve-formatter.js
       const resolverSource = fs.readFileSync(path.join(scriptsDir, '..', 'lib', 'resolve-formatter.js'), 'utf8');
       assert.ok(resolverSource.includes('npx.cmd'), 'resolve-formatter.js should use npx.cmd for Windows cross-platform safety');
@@ -3011,7 +3011,7 @@ async function runTests() {
   else failed++;
 
   if (
-    await asyncTest('blocks Windows shell metacharacters before shell:true formatter execution', async () => {
+    await asyncTest('blocks Windows shell metacharacters before formatter execution', async () => {
       const hookPath = path.join(scriptsDir, 'post-edit-format.js');
       const resolverPath = path.join(scriptsDir, '..', 'lib', 'resolve-formatter.js');
       const childProcess = require('child_process');
