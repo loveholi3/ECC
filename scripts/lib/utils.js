@@ -565,10 +565,10 @@ function grepFile(filePath, pattern) {
   let regex;
   try {
     if (pattern instanceof RegExp) {
-      // Always create a new RegExp without the 'g' flag to prevent lastIndex
-      // state issues when using .test() in a loop (g flag makes .test() stateful,
+      // Always create a new RegExp without the 'g' or 'y' flags to prevent lastIndex
+      // state issues when using .test() in a loop (g and y flags make .test() stateful,
       // causing alternating match/miss on consecutive matching lines)
-      const flags = pattern.flags.replace('g', '');
+      const flags = pattern.flags.replace(/[gy]/g, '');
       regex = new RegExp(pattern.source, flags);
     } else {
       regex = new RegExp(pattern);
