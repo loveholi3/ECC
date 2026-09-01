@@ -42,6 +42,12 @@ class TestGetProvider:
         with pytest.raises(ValueError, match="Unknown provider type"):
             get_provider("invalid")
 
+    def test_unregistered_provider_raises(self, monkeypatch):
+        from llm.providers import resolver
+        monkeypatch.delitem(resolver._PROVIDER_MAP, ProviderType.CLAUDE, raising=False)
+        with pytest.raises(ValueError, match="No provider registered for type: ProviderType.CLAUDE"):
+            get_provider(ProviderType.CLAUDE)
+
     def test_saved_llm_env_selects_provider(self, monkeypatch, tmp_path):
         monkeypatch.delenv("LLM_PROVIDER", raising=False)
         monkeypatch.chdir(tmp_path)
