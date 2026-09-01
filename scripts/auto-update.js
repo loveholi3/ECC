@@ -367,5 +367,6 @@ module.exports = {
   deriveRepoRootFromState,
   buildInstallApplyArgs,
   determineInstallCwd,
+  validateRepoRoot,
   runAutoUpdate
 };

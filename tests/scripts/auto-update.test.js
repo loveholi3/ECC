@@ -12,6 +12,7 @@ const {
   deriveRepoRootFromState,
   buildInstallApplyArgs,
   determineInstallCwd,
+  validateRepoRoot,
   runAutoUpdate,
 } = require('../../scripts/auto-update');
 const {
@@ -193,6 +194,84 @@ function runTests() {
     };
 
     assert.strictEqual(determineInstallCwd(record, '/tmp/ecc'), path.join('/tmp', 'project'));
+  })) passed += 1; else failed += 1;
+
+  if (test('validateRepoRoot throws if package.json is missing', () => {
+    const repoRoot = createTempDir('auto-update-validate-');
+    try {
+      assert.throws(
+        () => validateRepoRoot(repoRoot),
+        /missing package\.json/
+      );
+    } finally {
+      cleanup(repoRoot);
+    }
+  })) passed += 1; else failed += 1;
+
+  if (test('validateRepoRoot throws if install script is missing', () => {
+    const repoRoot = createTempDir('auto-update-validate-');
+    try {
+      fs.writeFileSync(
+        path.join(repoRoot, 'package.json'),
+        JSON.stringify({ name: 'everything-claude-code' })
+      );
+      assert.throws(
+        () => validateRepoRoot(repoRoot),
+        /missing install script/
+      );
+    } finally {
+      cleanup(repoRoot);
+    }
+  })) passed += 1; else failed += 1;
+
+  if (test('validateRepoRoot throws if package.json is unreadable', () => {
+    const repoRoot = createTempDir('auto-update-validate-');
+    try {
+      fs.mkdirSync(path.join(repoRoot, 'scripts'), { recursive: true });
+      fs.writeFileSync(path.join(repoRoot, 'scripts', 'install-apply.js'), '');
+      fs.writeFileSync(path.join(repoRoot, 'package.json'), '{ invalid json');
+      assert.throws(
+        () => validateRepoRoot(repoRoot),
+        /unreadable package\.json/
+      );
+    } finally {
+      cleanup(repoRoot);
+    }
+  })) passed += 1; else failed += 1;
+
+  if (test('validateRepoRoot throws if package name is untrusted', () => {
+    const repoRoot = createTempDir('auto-update-validate-');
+    try {
+      fs.mkdirSync(path.join(repoRoot, 'scripts'), { recursive: true });
+      fs.writeFileSync(path.join(repoRoot, 'scripts', 'install-apply.js'), '');
+      fs.writeFileSync(
+        path.join(repoRoot, 'package.json'),
+        JSON.stringify({ name: 'evil-package' })
+      );
+      assert.throws(
+        () => validateRepoRoot(repoRoot),
+        /not an official ECC package/
+      );
+    } finally {
+      cleanup(repoRoot);
+    }
+  })) passed += 1; else failed += 1;
+
+  if (test('validateRepoRoot returns normalized path for valid repo', () => {
+    const repoRoot = createTempDir('auto-update-validate-');
+    try {
+      fs.mkdirSync(path.join(repoRoot, 'scripts'), { recursive: true });
+      fs.writeFileSync(path.join(repoRoot, 'scripts', 'install-apply.js'), '');
+      fs.writeFileSync(
+        path.join(repoRoot, 'package.json'),
+        JSON.stringify({ name: 'everything-claude-code' })
+      );
+
+      const result = validateRepoRoot(repoRoot);
+      assert.strictEqual(result, path.resolve(repoRoot));
+    } finally {
+      cleanup(repoRoot);
+    }
   })) passed += 1; else failed += 1;
 
   if (test('runAutoUpdate reports when no install-state files are present', () => {
