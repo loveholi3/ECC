@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from typing import Any, Callable
 
-from llm.core.interface import ToolExecutionError
 from llm.core.types import LLMInput, LLMOutput, Message, Role, ToolCall, ToolDefinition, ToolResult
 
 
