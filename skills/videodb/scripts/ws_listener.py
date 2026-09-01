@@ -25,17 +25,18 @@ Examples:
   python scripts/ws_listener.py --clear /tmp/mydir                # Custom dir with clear
   kill "$(cat ~/.local/state/videodb/videodb_ws_pid)"             # Stop the listener
 """
-import os
-import sys
-import json
-import signal
 import asyncio
-import logging
 import contextlib
+import json
+import logging
+import os
+import signal
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 import videodb
@@ -110,13 +111,18 @@ def log(msg: str):
     LOGGER.info("%s", msg)
 
 
-def append_event(event: dict):
-    """Append event to JSONL file with timestamps."""
+async def append_event(event: dict):
+    """Append event to JSONL file with timestamps asynchronously."""
     now = datetime.now(timezone.utc)
     event["ts"] = now.isoformat()
     event["unix_ts"] = now.timestamp()
-    with EVENTS_FILE.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(event) + "\n")
+    line = json.dumps(event) + "\n"
+
+    def _write_event():
+        with EVENTS_FILE.open("a", encoding="utf-8") as f:
+            f.write(line)
+
+    await asyncio.to_thread(_write_event)
 
 
 def write_pid():
@@ -222,7 +228,7 @@ async def listen_with_retry():
                 backoff = min(backoff * 2, MAX_BACKOFF)
                 break
 
-            append_event(msg)
+            await append_event(msg)
             channel = msg.get("channel", msg.get("event", "unknown"))
             text = msg.get("data", {}).get("text", "")
             if text:
