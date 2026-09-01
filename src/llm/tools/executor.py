@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
-from llm.core.interface import ToolExecutionError
-from llm.core.types import LLMInput, LLMOutput, Message, Role, ToolCall, ToolDefinition, ToolResult
-
+from llm.core.types import (
+    LLMInput,
+    LLMOutput,
+    Message,
+    Role,
+    ToolCall,
+    ToolDefinition,
+    ToolResult,
+)
 
 ToolFunc = Callable[..., Any]
 

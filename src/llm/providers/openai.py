@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 from typing import Any
 
@@ -14,8 +13,15 @@ from llm.core.interface import (
     LLMProvider,
     RateLimitError,
 )
-from llm.core.types import LLMInput, LLMOutput, Message, ModelInfo, ProviderType, ToolCall
+from llm.core.types import (
+    LLMInput,
+    LLMOutput,
+    ModelInfo,
+    ProviderType,
+    ToolCall,
+)
 from llm.providers.constants import EMPTY_FILTERED_RESPONSE_ERROR
+from llm.providers.utils import parse_tool_arguments
 
 
 class OpenAIProvider(LLMProvider):
@@ -85,7 +91,7 @@ class OpenAIProvider(LLMProvider):
                     ToolCall(
                         id=tc.id or "",
                         name=tc.function.name,
-                        arguments={} if not tc.function.arguments else json.loads(tc.function.arguments),
+                        arguments=parse_tool_arguments(tc.function.arguments),
                     )
                     for tc in choice.message.tool_calls
                 ]
