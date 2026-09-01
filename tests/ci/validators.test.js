@@ -1036,7 +1036,7 @@ function runTests() {
     const skillDir = path.join(testDir, 'comment-only-name');
     fs.mkdirSync(skillDir);
     fs.writeFileSync(path.join(skillDir, 'SKILL.md'),
-      '---\nname: # todo\ndescription: "X"\norigin: ECC\n---\n# Skill');
+      '---\nname: # missing\ndescription: "X"\norigin: ECC\n---\n# Skill');
 
     const result = runSkillsValidator(testDir, ['--strict']);
     assert.strictEqual(result.code, 1, 'Strict mode must fail CI on empty name');

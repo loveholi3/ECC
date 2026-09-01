@@ -89,7 +89,7 @@ function inspectFrontmatter(lines) {
     const rawValue = match[2];
     // Strip unquoted comments for value/indicator inspection. Handles both
     // trailing comments (`foo: bar # note`) and comment-only values
-    // (`foo: # todo`) so the latter is treated as empty.
+    // (`foo: # missing`) so the latter is treated as empty.
     const valueNoComment = rawValue
       .replace(/^\s*#.*$/, '')
       .replace(/\s+#.*$/, '')
