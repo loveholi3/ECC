@@ -248,6 +248,35 @@ function main() {
       assert.strictEqual(result.status, 1);
       assert.match(result.stderr, /Unknown command: bogus/);
     }],
+    ['fails when a command terminates by a signal', () => {
+      const mockFile = path.join(os.tmpdir(), 'mock-spawn-signal.js');
+      fs.writeFileSync(mockFile, `
+        const cp = require('child_process');
+        const orig = cp.spawnSync;
+        cp.spawnSync = function(...args) {
+          if (process.env.TEST_SIMULATE_SIGNAL && args[1] && args[1][0] && args[1][0].includes('catalog.js')) {
+            return { signal: 'SIGTERM' };
+          }
+          return orig.apply(this, args);
+        };
+      `);
+
+      try {
+        const result = runCli(['catalog', 'show', 'framework:nextjs'], {
+          env: {
+            NODE_OPTIONS: "--require " + mockFile,
+            TEST_SIMULATE_SIGNAL: '1'
+          }
+        });
+
+        assert.strictEqual(result.status, 1);
+        assert.match(result.stderr, /Command "catalog" terminated by signal SIGTERM/);
+      } finally {
+        if (fs.existsSync(mockFile)) {
+          fs.unlinkSync(mockFile);
+        }
+      }
+    }],
   ];
 
   for (const [name, fn] of tests) {
