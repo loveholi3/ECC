@@ -1723,24 +1723,33 @@ function runTests() {
   })) passed++; else failed++;
 
   // ── Round 99: replaceInFile returns true even when pattern not found ──
-  console.log('\nRound 99: replaceInFile (no-match still returns true):');
+  console.log('\nRound 99: replaceInFile (no-match returns true but skips rewriting):');
 
-  if (test('replaceInFile returns true and rewrites file even when search does not match', () => {
-    // utils.js lines 405-417: replaceInFile reads content, calls content.replace(search, replace),
-    // and writes back the result. When the search pattern doesn't match anything,
-    // String.replace() returns the original string unchanged, but the function still
-    // writes it back to disk (changing mtime) and returns true. This means callers
-    // cannot distinguish "replacement made" from "no match found."
+  if (test('replaceInFile returns true and avoids rewriting file when search does not match', () => {
+    // utils.js lines 492-509: replaceInFile reads content, calls content.replace(search, replace),
+    // and writes back the result only if the content changed. When the search pattern doesn't match anything,
+    // String.replace() returns the original string unchanged, so it skips the disk write (saving I/O)
+    // but still returns true.
     const tmpDir = fs.mkdtempSync(path.join(utils.getTempDir(), 'r99-no-match-'));
     const testFile = path.join(tmpDir, 'test.txt');
     try {
       fs.writeFileSync(testFile, 'hello world');
+      // 파일 시스템 타임스탬프 해상도를 위해 잠시 대기하거나 mtime을 인위적으로 과거로 설정합니다.
+      const initialStat = fs.statSync(testFile);
+      fs.utimesSync(testFile, new Date(initialStat.atimeMs - 2000), new Date(initialStat.mtimeMs - 2000));
+      const adjustedStat = fs.statSync(testFile);
+
       const result = utils.replaceInFile(testFile, 'NONEXISTENT_PATTERN', 'replacement');
       assert.strictEqual(result, true,
         'replaceInFile returns true even when pattern is not found (no match guard)');
+
       const content = fs.readFileSync(testFile, 'utf8');
       assert.strictEqual(content, 'hello world',
         'Content should be unchanged since pattern did not match');
+
+      const finalStat = fs.statSync(testFile);
+      assert.strictEqual(finalStat.mtimeMs, adjustedStat.mtimeMs,
+        'File modification time should remain unchanged since rewrite was optimized out');
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
