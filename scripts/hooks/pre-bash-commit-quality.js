@@ -57,6 +57,18 @@ function shouldCheckFile(filePath) {
   return checkableExtensions.some(ext => filePath.endsWith(ext));
 }
 
+// Bolt Optimization: Extracted static patterns out of the loop function
+const SECRET_PATTERNS = [
+  { pattern: /sk-[a-zA-Z0-9]{20,}/, name: 'OpenAI API key' },
+  { pattern: /ghp_[a-zA-Z0-9]{36}/, name: 'GitHub PAT' },
+  { pattern: /AKIA[A-Z0-9]{16}/, name: 'AWS Access Key' },
+  { pattern: /api[_-]?key\s*[=:]\s*['"][^'"]+['"]/i, name: 'API key' }
+];
+
+const DEBUGGER_REGEX = /\bdebugger\b/;
+const TODO_REGEX = /\/\/\s*(TODO|FIXME):?\s*(.+)/;
+const ISSUE_REGEX = /#\d+|issue/i;
+
 /**
  * Find issues in file content
  * @param {string} filePath 
@@ -71,22 +83,28 @@ function findFileIssues(filePath) {
       return issues;
     }
     const lines = content.split('\n');
+    const numLines = lines.length;
     
-    lines.forEach((line, index) => {
-      const lineNum = index + 1;
+    // Bolt Optimization: Using standard for-loop instead of forEach for better performance
+    for (let i = 0; i < numLines; i++) {
+      const line = lines[i];
+      const lineNum = i + 1;
       
       // Check for console.log
-      if (line.includes('console.log') && !line.trim().startsWith('//') && !line.trim().startsWith('*')) {
-        issues.push({
-          type: 'console.log',
-          message: `console.log found at line ${lineNum}`,
-          line: lineNum,
-          severity: 'warning'
-        });
+      if (line.includes('console.log')) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('//') && !trimmed.startsWith('*')) {
+          issues.push({
+            type: 'console.log',
+            message: `console.log found at line ${lineNum}`,
+            line: lineNum,
+            severity: 'warning'
+          });
+        }
       }
       
-      // Check for debugger statements
-      if (/\bdebugger\b/.test(line) && !line.trim().startsWith('//')) {
+      // Check for debugger statements (fast-fail with includes)
+      if (line.includes('debugger') && DEBUGGER_REGEX.test(line) && !line.trim().startsWith('//')) {
         issues.push({
           type: 'debugger',
           message: `debugger statement at line ${lineNum}`,
@@ -95,36 +113,31 @@ function findFileIssues(filePath) {
         });
       }
       
-      // Check for TODO/FIXME without issue reference
-      const todoMatch = line.match(/\/\/\s*(TODO|FIXME):?\s*(.+)/);
-      if (todoMatch && !todoMatch[2].match(/#\d+|issue/i)) {
-        issues.push({
-          type: 'todo',
-          message: `TODO/FIXME without issue reference at line ${lineNum}: "${todoMatch[2].trim()}"`,
-          line: lineNum,
-          severity: 'info'
-        });
+      // Check for TODO/FIXME without issue reference (fast-fail with includes)
+      if (line.includes('TODO') || line.includes('FIXME')) {
+        const todoMatch = line.match(TODO_REGEX);
+        if (todoMatch && !ISSUE_REGEX.test(todoMatch[2])) {
+          issues.push({
+            type: 'todo',
+            message: `TODO/FIXME without issue reference at line ${lineNum}: "${todoMatch[2].trim()}"`,
+            line: lineNum,
+            severity: 'info'
+          });
+        }
       }
       
       // Check for hardcoded secrets (basic patterns)
-      const secretPatterns = [
-        { pattern: /sk-[a-zA-Z0-9]{20,}/, name: 'OpenAI API key' },
-        { pattern: /ghp_[a-zA-Z0-9]{36}/, name: 'GitHub PAT' },
-        { pattern: /AKIA[A-Z0-9]{16}/, name: 'AWS Access Key' },
-        { pattern: /api[_-]?key\s*[=:]\s*['"][^'"]+['"]/i, name: 'API key' }
-      ];
-      
-      for (const { pattern, name } of secretPatterns) {
-        if (pattern.test(line)) {
+      for (let j = 0; j < SECRET_PATTERNS.length; j++) {
+        if (SECRET_PATTERNS[j].pattern.test(line)) {
           issues.push({
             type: 'secret',
-            message: `Potential ${name} exposed at line ${lineNum}`,
+            message: `Potential ${SECRET_PATTERNS[j].name} exposed at line ${lineNum}`,
             line: lineNum,
             severity: 'error'
           });
         }
       }
-    });
+    }
   } catch {
     // File not readable, skip
   }
