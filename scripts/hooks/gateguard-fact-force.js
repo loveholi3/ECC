@@ -960,15 +960,13 @@ function isChecked(key) {
 // --- Sanitize file path against injection ---
 
 function sanitizePath(filePath) {
+  // ⚡ Bolt 최적화: V8 엔진에서는 문자열 순회(codePointAt)보다 정규 표현식을 사용하는 것이 성능상 훨씬 유리합니다.
   // Strip control chars (including null), bidi overrides, and newlines
-  let sanitized = '';
-  for (const char of String(filePath || '')) {
-    const code = char.codePointAt(0);
-    const isAsciiControl = code <= 0x1f || code === 0x7f;
-    const isBidiOverride = (code >= 0x200e && code <= 0x200f) || (code >= 0x202a && code <= 0x202e) || (code >= 0x2066 && code <= 0x2069);
-    sanitized += isAsciiControl || isBidiOverride ? ' ' : char;
-  }
-  return sanitized.trim().slice(0, 500);
+  return String(filePath || '')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\x00-\x1F\x7F\u200E-\u200F\u202A-\u202E\u2066-\u2069]/g, ' ')
+    .trim()
+    .slice(0, 500);
 }
 
 function normalizeForMatch(value) {

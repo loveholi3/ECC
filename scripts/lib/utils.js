@@ -157,7 +157,9 @@ function getProjectName() {
 function sanitizeSessionId(raw) {
   if (!raw || typeof raw !== 'string') return null;
 
-  const hasNonAscii = Array.from(raw).some(char => char.codePointAt(0) > 0x7f);
+  // ⚡ Bolt 최적화: Array.from(raw)에 의한 큰 객체 할당과 순회를 방지하기 위해 정규식을 사용합니다.
+  // eslint-disable-next-line no-control-regex
+  const hasNonAscii = /[^\x00-\x7F]/.test(raw);
   const normalized = raw.replace(/^\.+/, '');
   const sanitized = normalized
     .replace(/[^a-zA-Z0-9_-]/g, '-')
