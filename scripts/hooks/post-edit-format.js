@@ -61,7 +61,7 @@ function run(rawInput) {
           }
           const result = spawnSync(resolved.bin, args, {
             cwd: projectRoot,
-            shell: true,
+            shell: false,
             stdio: 'pipe',
             timeout: 15000
           });
